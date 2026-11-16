@@ -4,9 +4,16 @@
 
 package frc.robot;
 
+import java.util.List;
+
+import org.photonvision.targeting.PhotonPipelineResult;
+
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.config.VisionConfig;
+import frc.robot.subsystems.Vision;
 
 /**
  * The methods in this class are called automatically corresponding to each mode, as described in
@@ -17,7 +24,7 @@ public class Robot extends TimedRobot {
   private Command m_autonomousCommand;
 
   private final RobotContainer m_robotContainer;
-
+  private Field2d field = new Field2d();
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
@@ -25,6 +32,7 @@ public class Robot extends TimedRobot {
   public Robot() {
     // Instantiate our RobotContainer.  This will perform all our button bindings, and put our
     // autonomous chooser on the dashboard.
+  
     m_robotContainer = new RobotContainer();
   }
 
@@ -42,6 +50,48 @@ public class Robot extends TimedRobot {
     // and running subsystem periodic() methods.  This must be called from the robot's periodic
     // block in order for anything in the Command-based framework to work.
     CommandScheduler.getInstance().run();
+    VisionConfig.photonPoseEstimatorLeft.setReferencePose(
+        m_robotContainer.drivetrain.getState().Pose);
+    VisionConfig.photonPoseEstimatorRight.setReferencePose(
+        m_robotContainer.drivetrain.getState().Pose);
+    
+
+
+    List<PhotonPipelineResult> results = Vision.leftApriltagCamera.getAllUnreadResults();
+
+    if (!results.isEmpty()) {
+      PhotonPipelineResult result = results.get(results.size() - 1);
+      VisionConfig.photonPoseEstimatorLeft
+          .update(result)
+          .ifPresent(
+              (pose) -> {
+                if (result.multitagResult.isEmpty()
+                    && result.targets.get(0).bestCameraToTarget.getTranslation().getNorm() > 4) {
+                  return;
+                }
+                m_robotContainer.drivetrain.addVisionMeasurement(
+                    pose.estimatedPose.toPose2d(), pose.timestampSeconds);
+              });
+    } else {
+    }
+    results = Vision.rightApriltagCamera.getAllUnreadResults();
+
+    if (!results.isEmpty()) {
+      PhotonPipelineResult result = results.get(results.size() - 1);
+      VisionConfig.photonPoseEstimatorRight
+          .update(result)
+          .ifPresent(
+              (pose) -> {
+                if (result.multitagResult.isEmpty()
+                    && result.targets.get(0).bestCameraToTarget.getTranslation().getNorm() > 4) {
+                  return;
+                }
+                m_robotContainer.drivetrain.addVisionMeasurement(
+                    pose.estimatedPose.toPose2d(), pose.timestampSeconds);
+              });
+
+      field.setRobotPose(m_robotContainer.m_odometry.getEstimatedPosition());
+    }
   }
 
   /** This function is called once each time the robot enters Disabled mode. */
